@@ -29,6 +29,8 @@ impl syn::parse::Parse for Initializer {
 
 #[proc_macro]
 pub fn init_with(input: TokenStream) -> TokenStream {
+    let site = proc_macro2::Span::call_site();
+
     let init = syn::parse_macro_input!(input as Initializer);
 
     let size = match init.size.evaluate() {
@@ -37,6 +39,7 @@ pub fn init_with(input: TokenStream) -> TokenStream {
     };
 
     let vals: Vec<_> = (0usize..size)
+        .map(|i| syn::LitInt::new(&i.to_string(), site))
         .map(|i| match &init.func {
             syn::Expr::Path(p) => quote!(#p(#i)),
 
