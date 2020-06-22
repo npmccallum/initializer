@@ -7,6 +7,7 @@ use eval::Evaluate;
 
 #[derive(Debug)]
 struct Initializer {
+    keyw: syn::token::Do,
     func: syn::Expr,
     semi: syn::token::Semi,
     size: syn::Expr,
@@ -15,6 +16,7 @@ struct Initializer {
 impl syn::parse::Parse for Initializer {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         Ok(Self {
+            keyw: input.parse()?,
             func: input.parse()?,
             semi: input.parse()?,
             size: input.parse()?,
