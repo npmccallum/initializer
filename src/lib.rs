@@ -130,32 +130,24 @@ impl From<Full> for (Left, Right) {
 #[proc_macro_attribute]
 pub fn func(_metadata: TokenStream, input: TokenStream) -> TokenStream {
     let (left, right) = syn::parse_macro_input!(input as Full).into();
-    let iter = 0usize..right.size.evaluate().unwrap();
-    let func = match right.expr {
-        // Don't modify path statements.
-        syn::Expr::Path(p) => quote! { #p },
 
-        // Closures aren't const, so we convert a closure into a const fn.
-        syn::Expr::Closure(c) => {
-            let name = c.inputs.first();
-            let retv = &left.ty.elem;
-            let body = &c.body;
+    let mut values = Vec::new();
 
-            quote! {
-                {
-                    const fn a6275f0683648f565baa29cc3b98e89414ac333b(#name: usize) -> #retv {
-                        #body
-                    }
+    for i in 0usize..right.size.evaluate().unwrap() {
+        values.push(match right.expr {
+            syn::Expr::Path(ref p) => quote!(#p(#i)),
 
-                    a6275f0683648f565baa29cc3b98e89414ac333b
-                }
+            syn::Expr::Closure(ref c) => {
+                let name = c.inputs.first();
+                let body = &c.body;
+                quote!({ let #name = #i; #body })
             }
-        }
 
-        e => panic!("Unsupported expression: {:?}", e),
-    };
+            e => panic!("Unsupported expression: {:?}", e),
+        });
+    }
 
     TokenStream::from(quote! {
-        #left = [ #( #func(#iter) ),* ];
+        #left = [ #( #values ),* ];
     })
 }
