@@ -6,148 +6,43 @@ mod eval;
 use eval::Evaluate;
 
 #[derive(Debug)]
-enum Kind {
-    Const(syn::token::Const),
-    Static(syn::token::Static, Option<syn::token::Mut>),
-}
-
-impl quote::ToTokens for Kind {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-            Kind::Const(c) => c.to_tokens(tokens),
-            Kind::Static(s, m) => {
-                s.to_tokens(tokens);
-                m.to_tokens(tokens);
-            }
-        }
-    }
-}
-
-impl syn::parse::Parse for Kind {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(syn::token::Const) {
-            Ok(Kind::Const(input.parse()?))
-        } else if lookahead.peek(syn::token::Static) {
-            let kwstatic = input.parse()?;
-            let lookahead = input.lookahead1();
-            if lookahead.peek(syn::token::Mut) {
-                let kwmut = input.parse()?;
-                Ok(Kind::Static(kwstatic, Some(kwmut)))
-            } else {
-                Ok(Kind::Static(kwstatic, None))
-            }
-        } else {
-            Err(lookahead.error())
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Left {
-    attrs: Vec<syn::Attribute>,
-    vis: syn::Visibility,
-    kind: Kind,
-    ident: syn::Ident,
-    colon_token: syn::token::Colon,
-    ty: syn::TypeArray,
-}
-
-impl quote::ToTokens for Left {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        for a in &self.attrs {
-            a.to_tokens(tokens);
-        }
-
-        self.vis.to_tokens(tokens);
-        self.kind.to_tokens(tokens);
-        self.ident.to_tokens(tokens);
-        self.colon_token.to_tokens(tokens);
-        self.ty.to_tokens(tokens);
-    }
-}
-
-impl syn::parse::Parse for Left {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            attrs: input.call(syn::Attribute::parse_outer)?,
-            vis: input.parse()?,
-            kind: input.parse()?,
-            ident: input.parse()?,
-            colon_token: input.parse()?,
-            ty: input.parse()?,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct Right {
+struct Initializer {
     brkt: syn::token::Bracket,
-    expr: syn::Expr,
+    func: syn::Expr,
     semi: syn::token::Semi,
     size: syn::Expr,
 }
 
-impl syn::parse::Parse for Right {
+impl syn::parse::Parse for Initializer {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content;
         let bracketed = syn::bracketed!(content in input);
 
         Ok(Self {
             brkt: bracketed,
-            expr: content.parse()?,
+            func: content.parse()?,
             semi: content.parse()?,
             size: content.parse()?,
-         })
-    }
-}
-
-#[derive(Debug)]
-struct Full {
-    left: Left,
-    assn: syn::token::Eq,
-    rght: Right,
-    semi: syn::token::Semi,
-}
-
-impl syn::parse::Parse for Full {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            left: input.parse()?,
-            assn: input.parse()?,
-            rght: input.parse()?,
-            semi: input.parse()?,
         })
     }
 }
 
-impl From<Full> for (Left, Right) {
-    fn from(value: Full) -> Self {
-        (value.left, value.rght)
-    }
-}
+#[proc_macro]
+pub fn init_with(input: TokenStream) -> TokenStream {
+    let init = syn::parse_macro_input!(input as Initializer);
+    let vals: Vec<_> = (0usize..init.size.evaluate().unwrap())
+        .map(|i| match &init.func {
+            syn::Expr::Path(p) => quote!(#p(#i)),
 
-#[proc_macro_attribute]
-pub fn func(_metadata: TokenStream, input: TokenStream) -> TokenStream {
-    let (left, right) = syn::parse_macro_input!(input as Full).into();
-
-    let mut values = Vec::new();
-
-    for i in 0usize..right.size.evaluate().unwrap() {
-        values.push(match right.expr {
-            syn::Expr::Path(ref p) => quote!(#p(#i)),
-
-            syn::Expr::Closure(ref c) => {
+            syn::Expr::Closure(c) => {
                 let name = c.inputs.first();
                 let body = &c.body;
                 quote!({ let #name = #i; #body })
             }
 
             e => panic!("Unsupported expression: {:?}", e),
-        });
-    }
+        })
+        .collect();
 
-    TokenStream::from(quote! {
-        #left = [ #( #values ),* ];
-    })
+    quote!([ #( #vals ),* ]).into()
 }
