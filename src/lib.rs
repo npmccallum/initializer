@@ -25,7 +25,7 @@ impl syn::parse::Parse for Initializer {
 }
 
 #[proc_macro]
-pub fn init_with(input: TokenStream) -> TokenStream {
+pub fn foreach(input: TokenStream) -> TokenStream {
     let site = proc_macro2::Span::call_site();
 
     let init = syn::parse_macro_input!(input as Initializer);
