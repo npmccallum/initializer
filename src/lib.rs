@@ -30,7 +30,13 @@ impl syn::parse::Parse for Initializer {
 #[proc_macro]
 pub fn init_with(input: TokenStream) -> TokenStream {
     let init = syn::parse_macro_input!(input as Initializer);
-    let vals: Vec<_> = (0usize..init.size.evaluate().unwrap())
+
+    let size = match init.size.evaluate() {
+        Ok(size) => size,
+        Err(e) => return e.to_compile_error().into(),
+    };
+
+    let vals: Vec<_> = (0usize..size)
         .map(|i| match &init.func {
             syn::Expr::Path(p) => quote!(#p(#i)),
 
