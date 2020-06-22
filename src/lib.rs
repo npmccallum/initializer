@@ -7,7 +7,6 @@ use eval::Evaluate;
 
 #[derive(Debug)]
 struct Initializer {
-    brkt: syn::token::Bracket,
     func: syn::Expr,
     semi: syn::token::Semi,
     size: syn::Expr,
@@ -15,14 +14,10 @@ struct Initializer {
 
 impl syn::parse::Parse for Initializer {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let content;
-        let bracketed = syn::bracketed!(content in input);
-
         Ok(Self {
-            brkt: bracketed,
-            func: content.parse()?,
-            semi: content.parse()?,
-            size: content.parse()?,
+            func: input.parse()?,
+            semi: input.parse()?,
+            size: input.parse()?,
         })
     }
 }
